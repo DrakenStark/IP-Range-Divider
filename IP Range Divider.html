@@ -1,0 +1,1336 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>IP Range Divider</title>
+	<meta name="author" content="DrakenStark">
+	<style type="text/css">
+
+        body {
+            margin: 0 auto;
+		    text-align: center;
+            background-color: #000;
+            color: #FFF;
+		}
+
+        table {
+            border: none;
+            table-layout: fixed;
+        }
+
+        td {
+            border: none;
+            table-layout: fixed;
+        }
+
+        .headerTable {
+            width: 100%;
+            table-layout: fixed;
+	        text-align: center;
+	        vertical-align: top;
+        }
+
+        .headerDiv {
+            display: inline-block;
+	        vertical-align: top;
+	        text-align: center;
+            padding-right: 0.25em;
+        }
+
+        .calculatorInput {
+            width: 100%;
+	        text-align: center;
+	        vertical-align: top;
+        }
+
+        .display {
+            width: 100%;
+            table-layout: fixed;
+	        text-align: center;
+	        vertical-align: top;
+        }
+
+        .deviceAmount, .iPFilter {
+            table-layout: fixed;
+            background-color: #000;
+            color: #FFF;
+            border-color: #FFF;
+            resize: vertical;
+            overflow: auto;
+        }
+
+        .progressClass {
+            z-index: 1;
+            margin: 0 auto;
+            padding: 0px;
+	        position: fixed;
+	        height: 0em;
+	        text-align: center;
+	        vertical-align: top;
+	        background-color: #333333;
+            width:100%;
+	        bottom:0%;
+        }
+
+        .divDataRow {
+	        vertical-align: top;
+	        min-height: 1.5em;
+        }
+
+        .divDeviceIndex {
+            font-weight: bold;
+            margin: 0px;
+            padding: 0px;
+            display: inline-block;
+	        vertical-align: top;
+	        text-align: right;
+            width: 48%;
+        }
+
+        .divIPAddress {
+            margin: 0px;
+            padding: 0px;
+            display: inline-block;
+	        vertical-align: top;
+	        text-align: left;
+            width: 50%;
+        }
+
+        .whitespaceDiv {
+	        height: 1.3em;
+        }
+
+
+	</style>
+	<script>
+
+		//This function will ensure that the calculator is only available if Javascript is working.
+		//There's no point in otherwise using this tool.
+        function populateHTML() {
+            document.getElementById("calculatorInput").innerHTML = `
+            <h3>IP Range Divider</h3>
+            <br/>Version 4 by DrakenStark
+            <br/><div class="headerDiv">IP Addresses to Divide: </div><textarea id="iPFilter" class="iPFilter" oninput="filterIPRangeText();" onkeydown="if(event.keyCode === 13 && textFieldValidation()) { initiateCalculation(); }" rows="3" cols="34">` +
+                `10.0.0.0 - 10.255.255.255, 172.16.0.0 - 172.31.255.255, 192.168.0.0 - 192.168.255.255` +
+                `</textarea>
+            <br/>Number of devices to give IP Ranges: <input type="textfield" id="deviceAmount" class="deviceAmount" oninput="filterDeviceText();" onkeydown="if(event.keyCode === 13 && textFieldValidation()) { initiateCalculation(); }"/>
+            <br/><input id="deviceAmountButton" value="Calculate IP Ranges for each Device" type="button" onClick="initiateCalculation()" disabled="disabled"/>
+            `;
+
+            document.getElementById("debugHeader").innerHTML = "<br/><hr/><br/>";
+            document.getElementById("debug").innerHTML = `Unique IP Addresses and Ranges found in "IP Addresses to Divide" will be displayed here.<br/>`;
+            document.getElementById("displayHeader").innerHTML = "<br/><hr/><br/>";
+            document.getElementById("display").innerHTML = "Results will be displayed here.";
+            newIPFilterTextValue = document.getElementById("iPFilter").value;
+
+            //document.getElementById("debug").innerHTML = "Digit: " + iPFilterDigitCount + " | Period: " + iPFilterPeriodCount + " | HasHyphen: " + iPFilterHasHyphen + " | LeadZero: " + iPFilterHasLeadZero + " | LastSpace: " + iPFilterLastSpace + "<br/> DeviceStatus: " + deviceAmountStatus + " | IPRangeStatus: " + iPFilterStatus;
+        }
+
+        //******INPUT VALIDATION******
+        
+        //Checks the deviceAmount text field if it actually contains a valid number of devices to process with.
+        var deviceAmountField = "";
+        var iPFilter = "";
+        var deviceAmountStatus = false;
+        var iPFilterStatus = true;
+        var testCharacter = "";
+        var newDeviceTextValue = "";
+        var newIPFilterTextValue = "";
+
+
+        function textFieldValidation() {
+            return (deviceAmountStatus && iPFilterStatus);
+        }
+
+        var arrayIndexDevice = 0;
+        //This will filter out anything in the text field that is not a number.
+        function filterDeviceText() {
+            deviceAmountField = document.getElementById("deviceAmount").value;
+            newDeviceTextValue = "";
+            for (arrayIndexDevice = 0; arrayIndexDevice < deviceAmountField.length; arrayIndexDevice++) {
+                testCharacter = deviceAmountField.charAt(arrayIndexDevice);
+                if (parseInt(testCharacter) || testCharacter == "0") {
+                    newDeviceTextValue += testCharacter;
+                }
+            }
+
+            document.getElementById("deviceAmount").value = newDeviceTextValue;
+
+            deviceAmountStatus = !(deviceAmountField == 0 || deviceAmountField == "");
+            //document.getElementById("debug").innerHTML = "Digit: " + iPFilterDigitCount + " | Period: " + iPFilterPeriodCount + " | HasHyphen: " + iPFilterHasHyphen + " | LeadZero: " + iPFilterHasLeadZero + " | LastSpace: " + iPFilterLastSpace + "<br/> DeviceStatus: " + deviceAmountStatus + " | IPRangeStatus: " + iPFilterStatus;
+
+            //Now that the text field has been updated, enable the button if it is valid to do so.
+            document.getElementById("deviceAmountButton").disabled = !textFieldValidation();
+        }
+
+        
+        //These are the variables used for 
+        var iPFilterHasFocus = false;
+        var iPFilterRange = 0;
+        var iPFilterRangeLength = 0;
+        var iPFilterSelectStart = 0;
+        var iPFilterSelectEnd = 0;
+        
+        //These are the variables used for validating IP Addresses.
+        var iPFilterElement = null;
+        var iPFilterDigitCount = 0;
+        var iPFilterHasLeadZero = false;
+        var iPFilterPeriodCount = 0;
+        var iPFilterHasHyphen = false;
+        var iPFilterLastSpace = false;
+        var iPFilterDigitOverflow = false;
+        var iPFilterLastOctetFull = true;
+        var arrayIndexIP = 0;
+        //This will filter out anything in the test field that is not used when defining an IP Address Range.
+        function filterIPRangeText() {
+            iPFilterElement = document.getElementById("iPFilter");
+            iPFilterField = iPFilterElement.value;
+            newIPFilterTextValue = "";
+
+            //If the Textarea has focus, get caret position.
+            //NYI
+            if (iPFilterElement === document.activeElement) {
+                iPFilterHasFocus = true;
+                //getCaretPosition(iPFilterElement)
+                if (document.selection) {
+                    iPFilterElement.focus();
+                    iPFilterRange = document.selection.createRange();
+                    iPFilterRangeLength = iPFilterRange.text.length;
+                    iPFilterRange.moveStart('character', -iPFilterElement.value.length);
+                    iPFilterSelectStart = iPFilterRange.text.length - iPFilterRangeLength;
+                    iPFilterSelectEnd = iPFilterSelectStart + iPFilterRangeLength;
+                } else if (iPFilterElement.selectionStart || iPFilterElement.selectionStart == '0') {
+                    iPFilterSelectStart = iPFilterElement.selectionStart;
+                    iPFilterSelectEnd = iPFilterElement.selectionEnd;
+                } else {
+                    iPFilterSelectStart = 0;
+                    iPFilterSelectEnd = 0;
+                }
+            }
+
+            //Setting variables to their default value for a new validation check.
+            iPFilterDigitCount = 0;
+            iPFilterPeriodCount = 0;
+            iPFilterHasHyphen = false;
+            iPFilterHasLeadZero = false;
+            //document.getElementById("debug").innerHTML = "Starting New Validation Pass of <br/>" + iPFilterField + "<br/>";
+            for (arrayIndexIP = 0; arrayIndexIP < iPFilterField.length; arrayIndexIP++) {
+                testCharacter = iPFilterField.charAt(arrayIndexIP);
+
+                switch (testCharacter) {
+                    case "1":
+                    case "2":
+                    case "3":
+                    case "4":
+                    case "5":
+                    case "6":
+                    case "7":
+                    case "8":
+                    case "9":
+                    case "0":
+                        {
+                            //A number was detected for this character, so increment the DigitCount.
+                            iPFilterDigitCount++;
+                            iPFilterDigitOverflow = false;
+                            //If this is the last octet in an IP Address, set the iPFilterStatus to true as this should be a valid IP Address. Otherwise make sure iPFilterStatus is false.
+                            iPFilterStatus = (iPFilterDigitCount > 0 && iPFilterPeriodCount > 2);
+                            //If a zero was detected at the front of the Octet, set HasLeadZero to true. Otherwise set HasLeadZero to false.
+                            if (!iPFilterHasLeadZero && iPFilterDigitCount == 1) {
+                                iPFilterHasLeadZero = (testCharacter == "0");
+                            }
+                            //If a number is entered with a LeadZero in place, we should react to that accordingly.
+                            if (iPFilterHasLeadZero && iPFilterDigitCount == 2) {
+                                //If the new number entered was also a zero, jump to the next Octet or IP Address as there is no reason to have multiple zeros in the same Octet.
+                                if (testCharacter == "0") {
+                                    if (iPFilterDigitCount > 0) {
+                                        if (iPFilterPeriodCount < 3) {
+                                            newIPFilterTextValue += ".0";
+                                            iPFilterDigitCount = 1;
+                                            iPFilterPeriodCount++;
+                                            iPFilterStatus = (iPFilterPeriodCount > 2);
+                                            if (arrayIndexIP + 1 == iPFilterSelectStart) {
+                                                iPFilterSelectStart++;
+                                                iPFilterSelectEnd++;
+                                            }
+                                        } else if (iPFilterSelectStart == iPFilterField.length) {
+                                            iPFilterHasHyphen = false;
+                                            iPFilterPeriodCount = 0;
+                                            iPFilterDigitCount = 1;
+                                            newIPFilterTextValue += ", 0";
+                                            iPFilterStatus = false;
+                                            if (arrayIndexIP + 1 == iPFilterSelectStart) {
+                                                iPFilterSelectStart += 2;
+                                                iPFilterSelectEnd += 2;
+                                            }
+                                        }
+                                        //document.getElementById("debug").innerHTML += "Zero detected w/ LeadZero:<br/>" + newIPFilterTextValue + "<br/>";
+                                        break;
+                                    }
+                                } else {
+                                    //The new number entered was not a zero, so remove the LeadZero as there is no reason to have it.
+                                    newIPFilterTextValue = newIPFilterTextValue.slice(0, newIPFilterTextValue.length - 1) + testCharacter;
+                                    iPFilterHasLeadZero = false;
+                                    if (arrayIndexIP + 1 == iPFilterSelectStart) {
+                                        iPFilterSelectStart--;
+                                        iPFilterSelectEnd--;
+                                    }
+                                    //document.getElementById("debug").innerHTML += "LeadZero Taken out: " + testCharacter + "<br/>" + newIPFilterTextValue + "<br/>";
+                                    break;
+                                }
+                            }
+                            //If the number entered is the third number in a row, check to make sure it does not exceed the highest value for an Octet.
+                            if (iPFilterDigitCount < 4) {
+                                newIPFilterTextValue += testCharacter;
+                                //document.getElementById("debug").innerHTML += "#" + iPFilterDigitCount + " Digit Detected: " + testCharacter;
+                                if (iPFilterDigitCount == 3) {
+                                    if (parseInt("" + newIPFilterTextValue.charAt((newIPFilterTextValue.length - 3)) + newIPFilterTextValue.charAt((newIPFilterTextValue.length - 2)) + newIPFilterTextValue.charAt((newIPFilterTextValue.length - 1))) > 255) {
+                                        //document.getElementById("debug").innerHTML += " | " + newIPFilterTextValue.charAt((newIPFilterTextValue.length - 3)) + newIPFilterTextValue.charAt((newIPFilterTextValue.length - 2)) + newIPFilterTextValue.charAt((newIPFilterTextValue.length - 1)) + " exceeds 255, maxing out to 255.";
+                                        newIPFilterTextValue = newIPFilterTextValue.slice(0, newIPFilterTextValue.length - 3);
+                                        newIPFilterTextValue += 255;
+                                    } else {
+                                        //document.getElementById("debug").innerHTML += " | Failed to parse: " + newIPFilterTextValue.charAt((newIPFilterTextValue.length - 3)) + newIPFilterTextValue.charAt((newIPFilterTextValue.length - 2)) + newIPFilterTextValue.charAt((newIPFilterTextValue.length - 1));
+                                    }
+                                }
+                                //document.getElementById("debug").innerHTML += "<br/>" + newIPFilterTextValue + "<br/>";
+                                break;
+                            }
+
+
+                            if (iPFilterDigitCount > 3) {
+                                iPFilterDigitOverflow = true;
+                                //With this Octet completed, move onto the next Octet accordingly.
+                                if (iPFilterPeriodCount < 3) {
+                                    if (iPFilterSelectStart == iPFilterField.length) {
+                                        newIPFilterTextValue += "." + testCharacter;
+                                        if (arrayIndexIP + 1 == iPFilterSelectStart) {
+                                            iPFilterSelectStart++;
+                                            iPFilterSelectEnd++;
+                                        }
+                                        iPFilterPeriodCount++;
+                                        iPFilterDigitCount = 1;
+                                    } else {
+                                        newIPFilterTextValue += ".";
+                                        iPFilterPeriodCount++;
+                                        iPFilterDigitCount = 0;
+                                    }
+                                    iPFilterStatus = (iPFilterPeriodCount > 2);
+                                    if (arrayIndexIP == iPFilterSelectStart) {
+                                        iPFilterSelectStart++;
+                                        iPFilterSelectEnd++;
+                                    }
+                                    //document.getElementById("debug").innerHTML += "Excess Digit #" + iPFilterDigitCount + " Detected: " + testCharacter + "<br/>" + newIPFilterTextValue + "<br/>";
+                                    break;
+                                } else {
+                                    if (iPFilterLastOctetFull && iPFilterSelectStart == iPFilterField.length) {
+                                        iPFilterHasHyphen = false;
+                                        iPFilterPeriodCount = 0;
+                                        iPFilterDigitCount = 1;
+                                        newIPFilterTextValue += ", " + testCharacter;
+                                        iPFilterHasLeadZero = (testCharacter == "0");
+                                        iPFilterStatus = false;
+                                        if (arrayIndexIP + 1 == iPFilterSelectStart) {
+                                            iPFilterSelectStart += 2;
+                                            iPFilterSelectEnd += 2;
+                                        }
+                                        //document.getElementById("debug").innerHTML += "Excess Digit #" + iPFilterDigitCount + " Detected: " + testCharacter + "<br/>" + newIPFilterTextValue + "<br/>";
+                                        break;
+                                    }
+                                }
+                            }
+
+                            //We know it was a number entered at this point, no need to check if it was anything else.
+                            break;
+                        }
+
+                    case ".":
+                        {
+                            //If a period was added via overflow, ignore the next period.
+                            if (iPFilterDigitOverflow) {
+                                //document.getElementById("debug").innerHTML += "Ignoring Detected Period due to Excess Digit already populating one: " + testCharacter + "<br/>" + newIPFilterTextValue + "<br/>";
+                                break;
+                            }
+
+                            //A period was detected for this character, so we should check the number of Octets to see if it is valid.
+                            if (iPFilterPeriodCount < 3) {
+                                //The number of Octets is still valid check if a digit was entered beforehand, if not add a zero to make it a valid Octet and move onto the next one.
+                                if (iPFilterDigitCount > 0) {
+                                    newIPFilterTextValue += ".";
+                                    iPFilterHasLeadZero = false;
+                                    iPFilterDigitCount = 0;
+                                    iPFilterPeriodCount++;
+                                    iPFilterStatus = false;
+                                } else {
+                                    newIPFilterTextValue += "0.";
+                                    iPFilterHasLeadZero = false;
+                                    iPFilterDigitCount = 0;
+                                    iPFilterPeriodCount++;
+                                    iPFilterStatus = false;
+                                    if (arrayIndexIP + 1 == iPFilterSelectStart) {
+                                        iPFilterSelectStart++;
+                                        iPFilterSelectEnd++;
+                                    }
+                                }
+                                //document.getElementById("debug").innerHTML += "Period #" + iPFilterPeriodCount + " Detected: " + testCharacter + "<br/>" + newIPFilterTextValue + "<br/>";
+                                break;
+                            } else {
+                                //If we know a period was entered and it is not valid, ignore it and there is no need to check if it was something else.
+                                break;
+                            }
+                        }
+
+                    case ",":
+                    case "-":
+                        //If the number of Octets is less than 3, we already know neither a comma or hyphen is valid at this point.
+                        if (iPFilterPeriodCount > 2) {
+                            //If the last iteration had a space as the last character and it is now missing, we know it has been deleted so ignore any character here as the intent to delete is apparent.
+                            if (!(iPFilterLastSpace && arrayIndexIP == (iPFilterField.length - 1))) {
+                                //At this point we know we are at least on the last Octet, so we may act accordingly for a comma or hyphen.
+                                //document.getElementById("debug").innerHTML += "Invalid comma or hyphen Detected: " + testCharacter + "<br/>" + newIPFilterTextValue + "<br/>";
+                                if (testCharacter == ",") {
+                                    //If a comma was detected, if there is not a number in the last Octet add a zero and then move on to the next Octet.
+                                    if (iPFilterDigitCount == 0) {
+                                        newIPFilterTextValue += "0";
+                                        if (arrayIndexIP + 1 == iPFilterSelectStart) {
+                                            iPFilterSelectStart += 2;
+                                            iPFilterSelectEnd += 2;
+                                        }
+                                    }
+                                    iPFilterHasHyphen = false;
+                                    iPFilterPeriodCount = 0;
+                                    iPFilterDigitCount = 0;
+                                    newIPFilterTextValue += ", ";
+                                    iPFilterHasLeadZero = false;
+                                    iPFilterStatus = false;
+                                    if (arrayIndexIP + 1 == iPFilterSelectStart) {
+                                        iPFilterSelectStart++;
+                                        iPFilterSelectEnd++;
+                                    }
+                                    //document.getElementById("debug").innerHTML += "Comma Detected: " + testCharacter + "<br/>" + newIPFilterTextValue + "<br/>";
+                                    break;
+                                }
+
+                                //If the IP Address before this one already had a hyphen to join into this IP Address, it would be invalid to allow another hyphen after this IP Address.
+                                if (!iPFilterHasHyphen && testCharacter == "-") {
+                                    //If a hyphen was detected, if there is not a number in the last Octet add a zero and then move on to the next Octet.
+                                    if (iPFilterDigitCount == 0) {
+                                        newIPFilterTextValue += "0";
+                                        if (arrayIndexIP + 1 == iPFilterSelectStart) {
+                                            iPFilterSelectStart += 3;
+                                            iPFilterSelectEnd += 3;
+                                        }
+                                    }
+                                    iPFilterHasHyphen = true;
+                                    iPFilterPeriodCount = 0;
+                                    iPFilterDigitCount = 0;
+                                    newIPFilterTextValue += " - ";
+                                    iPFilterHasLeadZero = false;
+                                    iPFilterStatus = false;
+                                    if (arrayIndexIP + 1 == iPFilterSelectStart) {
+                                        iPFilterSelectStart += 2;
+                                        iPFilterSelectEnd += 2;
+                                    }
+                                    //document.getElementById("debug").innerHTML += "Hyphen Detected: " + testCharacter + "<br/>" + newIPFilterTextValue + "<br/>";
+                                }
+                            }
+                        }
+                }
+            }
+
+            iPFilterLastOctetFull = (iPFilterPeriodCount == 3 && ((parseInt("" + newIPFilterTextValue.charAt((newIPFilterTextValue.length - 3)) + newIPFilterTextValue.charAt((newIPFilterTextValue.length - 2)) + newIPFilterTextValue.charAt((newIPFilterTextValue.length - 1))) > 99)));
+            iPFilterLastSpace = (/\s+$/.test(newIPFilterTextValue));
+
+            if (newIPFilterTextValue == "") {
+                iPFilterStatus = false;
+            }
+
+            //document.getElementById("debug").innerHTML = "Digit: " + iPFilterDigitCount + " | Period: " + iPFilterPeriodCount + " | HasHyphen: " + iPFilterHasHyphen + " | LeadZero: " + iPFilterHasLeadZero + " | LastSpace: " + iPFilterLastSpace + "<br/> DeviceStatus: " + deviceAmountStatus + " | IPRangeStatus: " + iPFilterStatus + "<br/>iPFilterHasFocus: " + iPFilterHasFocus;
+            //document.getElementById("debug").innerHTML = "iPFilterLastOctetFull: " + iPFilterLastOctetFull + " | iPFilterLastSpace: " + iPFilterLastSpace + " | iPFilterHasFocus: " + iPFilterHasFocus + " | iPFilterSelectStart: " + iPFilterSelectStart + " | iPFilterSelectEnd: " + iPFilterSelectEnd + " | iPFilterField.length: " + iPFilterField.length;
+
+            document.getElementById("iPFilter").value = newIPFilterTextValue;
+
+            //If the Textarea had focus, set the caret to the position it used to have.
+            //NYI
+            if (iPFilterHasFocus) {
+                //setCaretPosition();
+                if (iPFilterElement.setSelectionRange) {
+                    iPFilterElement.focus();
+                    iPFilterElement.setSelectionRange(iPFilterSelectStart, iPFilterSelectEnd);
+                } else if (iPFilterElement.createTextRange) {
+                    iPFilterRange = iPFilterElement.createTextRange();
+                    iPFilterRange.collapse(true);
+                    iPFilterRange.moveEnd('character', iPFilterSelectEnd);
+                    iPFilterRange.moveStart('character', iPFilterSelectStart);
+                    iPFilterRange.select();
+                }
+            }
+
+            //Now that the text field has been updated, enable the button if it is valid to do so.
+            document.getElementById("deviceAmountButton").disabled = !textFieldValidation();
+        }
+
+        
+
+
+
+
+
+
+
+
+        //******NUMBER CRUNCHING******
+
+        //This allows the browser to not be frozen while the calculation is running.
+        var timeStartedLoadingDate = new Date();
+        var timeStartedLoading = timeStartedLoadingDate.getTime();
+		var timeCurrentLoadingDate = new Date();
+		var timeCurrentLoading = timeCurrentLoadingDate.getTime();
+        var cooldownPeriod = 0;
+        var calculationsUnderway = 0;
+        var arrayIndexCalc = 0;
+        function calculationSetTimeout(loopingStep, instanceNum) {
+            //Do not let more than one calculation process at a time.
+            if (instanceNum != calculationsUnderway) {
+                return;
+            }
+            timeCurrentLoading = new Date().getTime();
+            cooldownPeriod = timeCurrentLoading - timeStartedLoading + 1;
+            if (arrayIndexCalc < deviceAmount) {
+                switch (loopingStep) {
+                    case 0: {
+                        setTimeout(function () { parseIPFilterText(instanceNum); }, cooldownPeriod);
+                        break;
+                    }
+                    case 1: {
+                        setTimeout(function () { mergeSortedData(instanceNum); }, cooldownPeriod);
+                        break;
+                    }
+                    case 2: {
+                        setTimeout(function () { displayCalculations(instanceNum); }, cooldownPeriod);
+                        break;
+                    }
+                    case 3: {
+                        setTimeout(function () { displayCalculations(instanceNum); }, cooldownPeriod);
+                    }
+                }
+            }
+        }
+
+
+
+        var processingInteger = 0;
+        var octetInteger = 0;
+        var calculatedIP = "";
+        var arrayIndexConvert = 0;
+        //Since this will be done a lot, this is where integers will be made into human readable IP addresses.
+        function integerToIP(receivedInteger) {
+            processingInteger = receivedInteger;
+            octetInteger = 0;
+            calculatedIP = "";
+            //document.getElementById("debug").innerHTML =  "receivedInteger: " + receivedInteger + "<br>";
+            for (arrayIndexConvert = 0; arrayIndexConvert < 4; arrayIndexConvert++) {
+                //document.getElementById("debug").innerHTML += "processingInteger: " + processingInteger;
+                octetInteger = processingInteger & 255;
+                processingInteger = processingInteger >>> 8;
+
+                if (arrayIndexConvert == 3) {
+                    calculatedIP = octetInteger + "" + calculatedIP;
+                } else {
+                    calculatedIP = "." + octetInteger + "" + calculatedIP;
+                }
+
+                //document.getElementById("debug").innerHTML += " octetInteger: " + octetInteger + "<br>";
+                octetInteger = 0;
+            }
+
+            return calculatedIP;
+        }
+
+
+
+        //These variables will be used as a bookmark to be picked up from device to device.
+        var scanBookmark = 0;
+		var calculationTable = null;
+		var calculationNewRow = null;
+        var calculationRowContents = "";
+        //The parsed value from the deviceAmount field will be stored into this variable if it is a valid integer.
+        var deviceAmount = 1;
+        //This will store the number of IP Addresses each device will approximately have.
+        //17891327 is the total number of Private IP addresses in IPv4.
+        var scanPile = 17891327;
+
+        var tableOfCalculations = null;
+        var newRow = null;
+        var newCell = null;
+        var progressDiv = null;
+        var progressDivTextNode = null;
+        var timeCalculatingStarted = null;
+        var deconstructingIPFilter = null;
+        var integerIPArray = [{integerIPArrayBase: 0, integerIPArrayRange: 0}];
+        var deconstIPAddressBase = 0;
+        var deconstIPAddressRange = 0;
+        var deconstIPRangeSwap = 0;
+        var deconstProgressOctet = "";
+        var arrayIndexDecon = 0;
+        var deconstNearestHyphen = -1;
+        var deconstNearestComma = -1;
+        var deconstHasRange = false;
+        var deconstIterations = 0;
+        var totalDevices = 0;
+        var iPFilterText = "";
+
+        //First step
+        function initiateCalculation() {
+            calculationsUnderway++;
+
+            //Display the progress for the end user to see.
+            progressDiv = document.getElementById("progress");
+            progressDiv.innerHTML = "";
+            progressDiv.appendChild(document.createTextNode("IP Address Parsing proccess Started."));
+            progressDiv.style.height = "1.2em";
+            //document.getElementById("debug").innerHTML = "Parsing Started!<br/>";
+
+            document.getElementById("debug").innerHTML = ""; // "calculationsUnderway = " + calculationsUnderway + "<br/>";
+
+            timeCalculatingStarted = new Date().getTime();
+
+            totalDevices = newDeviceTextValue;
+            iPFilterText = newIPFilterTextValue;
+
+            deconstructingIPFilter = iPFilterText;
+            integerIPArray = [];
+            arrayIndexDecon = 0;
+            integerIPArray = [{ integerIPArrayBase: 0, integerIPArrayRange: 0 }];
+            deconstIterations = (iPFilterText.split(",").length);
+            parseIPFilterText(calculationsUnderway);
+        }
+
+        //Second step
+        function parseIPFilterText(instanceNum) {
+            //Do not run if a new calculation has been started.
+            if (instanceNum != calculationsUnderway) {
+                return;
+            }
+
+            while (arrayIndexDecon < deconstIterations) {
+
+                //Starting reference for timing out and starting on another frame.
+                timeStartedLoading = new Date().getTime();
+
+                //Build deconstIPAddressBase from IP Address Octets.
+                deconstProgressOctet = "" + deconstructingIPFilter.match(/\d{1,3}/);
+                deconstIPAddressBase = parseInt(deconstProgressOctet) * 16777216;
+                //document.getElementById("debug").innerHTML += "Detected Octets: " + deconstProgressOctet + ".";
+                deconstructingIPFilter = deconstructingIPFilter.slice((deconstructingIPFilter.indexOf(".") + 1), deconstructingIPFilter.length);
+
+                deconstProgressOctet = "" + deconstructingIPFilter.match(/\d{1,3}/);
+                deconstIPAddressBase += parseInt(deconstProgressOctet) * 65536;
+                //document.getElementById("debug").innerHTML += deconstProgressOctet + ".";
+                deconstructingIPFilter = deconstructingIPFilter.slice((deconstructingIPFilter.indexOf(".") + 1), deconstructingIPFilter.length);
+
+                deconstProgressOctet = "" + deconstructingIPFilter.match(/\d{1,3}/);
+                deconstIPAddressBase += parseInt(deconstProgressOctet) * 256;
+                //document.getElementById("debug").innerHTML += deconstProgressOctet + ".";
+                deconstructingIPFilter = deconstructingIPFilter.slice((deconstructingIPFilter.indexOf(".") + 1), deconstructingIPFilter.length);
+
+                deconstProgressOctet = "" + deconstructingIPFilter.match(/\d{1,3}/);
+                deconstIPAddressBase += parseInt(deconstProgressOctet);
+                //document.getElementById("debug").innerHTML += "" + deconstProgressOctet;
+
+                deconstNearestHyphen = deconstructingIPFilter.indexOf("-");
+                deconstNearestComma = deconstructingIPFilter.indexOf(",");
+
+                //For there to be a range, there has to be a hyphen and if there is also a comma, the hyphen needs to be before it.
+                deconstHasRange = (deconstNearestHyphen != -1 && (deconstNearestComma == -1 || (deconstNearestComma != -1 && deconstNearestHyphen < deconstNearestComma)));
+
+                if (deconstHasRange) {
+                    //document.getElementById("debug").innerHTML += " - ";
+                    deconstructingIPFilter = deconstructingIPFilter.slice((deconstructingIPFilter.indexOf("-") + 2), deconstructingIPFilter.length);
+
+                    //Build deconstIPAddressRange from IP Address Octets.
+                    deconstProgressOctet = "" + deconstructingIPFilter.match(/\d{1,3}/);
+                    deconstIPAddressRange = parseInt(deconstProgressOctet) * 16777216;
+                    //document.getElementById("debug").innerHTML += deconstProgressOctet + ".";
+                    deconstructingIPFilter = deconstructingIPFilter.slice((deconstructingIPFilter.indexOf(".") + 1), deconstructingIPFilter.length)
+
+                    deconstProgressOctet = "" + deconstructingIPFilter.match(/\d{1,3}/);
+                    deconstIPAddressRange += parseInt(deconstProgressOctet) * 65536;
+                    //document.getElementById("debug").innerHTML += deconstProgressOctet + ".";
+                    deconstructingIPFilter = deconstructingIPFilter.slice((deconstructingIPFilter.indexOf(".") + 1), deconstructingIPFilter.length);
+
+                    deconstProgressOctet = "" + deconstructingIPFilter.match(/\d{1,3}/);
+                    deconstIPAddressRange += parseInt(deconstProgressOctet) * 256;
+                    //document.getElementById("debug").innerHTML += deconstProgressOctet + ".";
+                    deconstructingIPFilter = deconstructingIPFilter.slice((deconstructingIPFilter.indexOf(".") + 1), deconstructingIPFilter.length);
+
+                    deconstProgressOctet = "" + deconstructingIPFilter.match(/\d{1,3}/);
+                    deconstIPAddressRange += parseInt(deconstProgressOctet);
+                    //document.getElementById("debug").innerHTML += deconstProgressOctet + ", <br/>";
+                    if (deconstructingIPFilter.indexOf(",") != -1) {
+                        deconstructingIPFilter = deconstructingIPFilter.slice((deconstructingIPFilter.indexOf(",") + 2), deconstructingIPFilter.length);
+                    }
+
+                    if (deconstIPAddressBase > deconstIPAddressRange)
+                    {
+                        deconstIPRangeSwap = deconstIPAddressBase;
+                        deconstIPAddressBase = deconstIPAddressRange;
+                        deconstIPAddressRange = deconstIPRangeSwap;
+                    }
+                } else {
+                    //document.getElementById("debug").innerHTML += ", <br/>";
+                    if (deconstructingIPFilter.indexOf(",") != -1) {
+                        deconstructingIPFilter = deconstructingIPFilter.slice((deconstructingIPFilter.indexOf(",") + 2), deconstructingIPFilter.length);
+                    }
+                    deconstIPAddressRange = deconstIPAddressBase;
+                }
+
+                integerIPArray[arrayIndexDecon] = { integerIPArrayBase: deconstIPAddressBase, integerIPArrayRange: deconstIPAddressRange };
+                //document.getElementById("debug").innerHTML +=  "#" + arrayIndexDecon + " integerIPArrayBase - integerIPArrayRange: " + integerIPArray[arrayIndexDecon].integerIPArrayBase + " - " + integerIPArray[arrayIndexDecon].integerIPArrayRange + "<br/>";
+
+                arrayIndexDecon++;
+                //document.getElementById("debug").innerHTML += "Parsing Loop " + arrayIndexDecon + " Completed!<br/>";
+
+                //If there is going to be another iteration and the amount of time for the browser to be detected as frozen passes, break away and attempt to resume the calculation the next frame.
+                if (arrayIndexDecon < deconstIterations) {
+                    timeCurrentLoading = new Date().getTime();
+                    if (timeCurrentLoading >= (timeStartedLoading + 1)) {
+                        //document.getElementById("debug").innerHTML += "Parsing Loop Broke Away at " + arrayIndexDecon + "!<br/>";
+                        calculationSetTimeout(0, instanceNum);
+                        return;
+                    }
+                }
+            }
+
+            progressDiv.textContent = "IP Address Parsing proccess Completed.";
+            //document.getElementById("debug").innerHTML += "Parsing Completed!<br/>";
+            initiateSorting(instanceNum);
+        }
+
+
+        var arrayIndexSorting = 0
+        var integerIPArrayLength = 0;
+        var mergingIPArray = [{integerIPArrayBase: 0, integerIPArrayRange: 0}];
+        //Third step
+        function initiateSorting(instanceNum) {
+            //Do not run if a new calculation has been started.
+            if (instanceNum != calculationsUnderway) {
+                return;
+            }
+
+            progressDiv.textContent = "Sorting and Merging process Started.";
+            //document.getElementById("debug").innerHTML += "Sorting Started!<br/>";
+
+            integerIPArrayLength = integerIPArray.length;
+            /*for(arrayIndexSorting = 0; arrayIndexSorting < integerIPArrayLength; arrayIndexSorting++)
+            {
+                document.getElementById("debug").innerHTML +=  "Unsorted Range " + arrayIndexSorting + ": " + integerIPArray[arrayIndexSorting].integerIPArrayBase + " - " + integerIPArray[arrayIndexSorting].integerIPArrayRange + "<br/>";
+            }*/
+
+            integerIPArray.sort(function (a, b) { return ((a.integerIPArrayBase < b.integerIPArrayBase) ? -1 : ((a.integerIPArrayBase == b.integerIPArrayBase) ? 0 : 1)); });
+
+            /*for(arrayIndexSorting = 0; arrayIndexSorting < integerIPArrayLength; arrayIndexSorting++)
+            {
+                document.getElementById("debug").innerHTML +=  "Sorted Range " + arrayIndexSorting + ": " + integerIPArray[arrayIndexSorting].integerIPArrayBase + " - " + integerIPArray[arrayIndexSorting].integerIPArrayRange + "<br/>";
+            }*/
+
+            arrayIndexMerging = 0;
+            newMergeNeeded = false;
+            mergeWasNotMade = true;
+            mergingIPArray = [];
+            arrayIndexSorting = 0;
+            mergingIPArray[0] = { integerIPArrayBase: integerIPArray[0].integerIPArrayBase, integerIPArrayRange: integerIPArray[0].integerIPArrayRange };
+            //This will be the starting point every time anyway, may as well calculate it here.
+            mergeSortedData(calculationsUnderway);
+        }
+
+        //Fourth step
+        var arrayIndexMerging = 0;
+        var newMergeNeeded = false;
+        var mergeWasNotMade = true;
+        function mergeSortedData(instanceNum) {
+            //Do not run if a new calculation has been started.
+            if (instanceNum != calculationsUnderway) {
+                return;
+            }
+
+            if (integerIPArrayLength > 1) {
+                while (arrayIndexSorting < (integerIPArrayLength - 1)) {
+                    //Starting reference for timing out and starting on another frame.
+                    timeStartedLoading = new Date().getTime();
+
+                    //document.getElementById("debug").innerHTML += "Started loop " + (arrayIndexSorting + 1) + "/" + (integerIPArrayLength - 1)  + " | ";
+                    //for (arrayIndexSorting = 0; arrayIndexSorting < mergingIPArray.length; arrayIndexSorting++) {
+                    //    document.getElementById("debug").innerHTML += "Merged Range " + arrayIndexSorting + ": " + mergingIPArray[arrayIndexSorting].integerIPArrayBase + " - " + mergingIPArray[arrayIndexSorting].integerIPArrayRange + "<br/>";
+                    //}
+
+                    //Check the end of the first IP Address with the start of the second. If the end is higher than the start or just off by one, move onto merging.
+
+                    //document.getElementById("debug").innerHTML += "Tested " + integerIPArray[arrayIndexMerging].integerIPArrayRange + " & " + integerIPArray[(arrayIndexSorting + 1)].integerIPArrayBase + "<br/>";
+                    if ((integerIPArray[arrayIndexMerging].integerIPArrayRange + 1) >= integerIPArray[(arrayIndexSorting + 1)].integerIPArrayBase) {
+                        //FirstIPRange is larger than the SecondIPBase. Merge the two ranges together if the SecondIPRange is larger than the FirstIPRange, otherwise move onto the next loop.
+                        if (integerIPArray[arrayIndexMerging].integerIPArrayRange <= integerIPArray[(arrayIndexSorting + 1)].integerIPArrayRange) {
+                            //document.getElementById("debug").innerHTML += "Merged " + integerIPArray[arrayIndexMerging].integerIPArrayRange + " <= " + integerIPArray[(arrayIndexSorting + 1)].integerIPArrayRange + "<br/>";
+                            mergingIPArray[arrayIndexMerging].integerIPArrayRange = integerIPArray[(arrayIndexSorting + 1)].integerIPArrayRange;
+                            mergeWasNotMade = false;
+                        } else {
+                            //document.getElementById("debug").innerHTML += "Absorbed " + integerIPArray[arrayIndexMerging].integerIPArrayRange + " >= " + integerIPArray[(arrayIndexSorting + 1)].integerIPArrayRange + "<br/>";
+                            mergeWasNotMade = false;
+                        }
+                    } else {
+                        //document.getElementById("debug").innerHTML += "Left Alone " + integerIPArray[arrayIndexMerging].integerIPArrayRange + " <= " + integerIPArray[(arrayIndexSorting + 1)].integerIPArrayBase + "<br/>";
+                        //FirstIPRange and SecondIPBase are significantly apart that they cannot be merged.
+                        //mergingIPArray[arrayIndexMerging].integerIPArrayRange = integerIPArray[arrayIndexSorting].integerIPArrayRange;
+                        newMergeNeeded = true;
+                    }
+
+                    arrayIndexSorting++;
+
+                    if (newMergeNeeded) {
+                        //document.getElementById("debug").innerHTML += "Loaded new merge index!<br/>";
+                        arrayIndexMerging++;
+                        mergingIPArray[arrayIndexMerging] = { integerIPArrayBase: integerIPArray[arrayIndexSorting].integerIPArrayBase, integerIPArrayRange: integerIPArray[arrayIndexSorting].integerIPArrayRange };
+                        newMergeNeeded = false;
+                    }
+
+                    //If there is going to be another iteration and the amount of time for the browser to be detected as frozen passes, break away and attempt to resume the calculation the next frame.
+                    if (arrayIndexSorting < (integerIPArrayLength - 1)) {
+                        timeCurrentLoading = new Date().getTime();
+                        if (timeCurrentLoading >= (timeStartedLoading + 1)) {
+                            //document.getElementById("debug").innerHTML += "Merging Loop Broke Away at " + arrayIndexSorting + "!<br/>";
+                            calculationSetTimeout(1, instanceNum);
+                            return;
+                        }
+                    }
+                }
+            } else {
+                mergingIPArray[0].integerIPArrayBase = integerIPArray[0].integerIPArrayBase;
+                mergingIPArray[0].integerIPArrayRange = integerIPArray[0].integerIPArrayRange;
+            }
+
+            if (mergeWasNotMade) {
+                //document.getElementById("debug").innerHTML += "Complete copy was made in lieu of a merge.<br/>";
+                mergingIPArray = integerIPArray;
+            }
+
+            progressDiv.textContent = "Sorting and Merging IP Addresses Completed.";
+            //document.getElementById("debug").innerHTML += "Sorting and Merging Completed!<br/>";
+
+            document.getElementById("debug").innerHTML += "Unique IP Addresses and Ranges Found:<br/>";
+            for(arrayIndexSorting = 0; arrayIndexSorting < mergingIPArray.length; arrayIndexSorting++)
+            {
+                document.getElementById("debug").innerHTML += integerToIP(mergingIPArray[arrayIndexSorting].integerIPArrayBase);
+                if (mergingIPArray[arrayIndexSorting].integerIPArrayBase != mergingIPArray[arrayIndexSorting].integerIPArrayRange) {
+                    document.getElementById("debug").innerHTML += " - " + integerToIP(mergingIPArray[arrayIndexSorting].integerIPArrayRange);
+                } 
+                if (arrayIndexSorting < (mergingIPArray.length - 1)){
+                    document.getElementById("debug").innerHTML += ",<br/>";
+                }
+            }
+            initiateCalcDisplay(instanceNum);
+            //initiateResultDisplayOLD();
+        }
+
+
+        //Fifth step
+        var arrayIndexDisplay = 0;
+        var totalIPAddresses = 0;
+        var eachToScan = 0;
+        var scanUnderflow = 0;
+        var scanUnderflowRemaining = 0;
+        var scanProgress = 0;
+        var scanProgressGoal = 0;
+        var progressIPArray = [{ integerIPArrayBase: 0, integerIPArrayRange: 0 }];
+        var iPArrayLength = 0;
+        var completedIPArrays = 0;
+        var displayTotalIPMessage = false;
+        function initiateCalcDisplay(instanceNum) {
+            //Do not run if a new calculation has been started.
+            if (instanceNum != calculationsUnderway) {
+                return;
+            }
+
+            progressDiv.textContent = "Display Process Started.";
+            //document.getElementById("debug").innerHTML += "Display Started!<br/>";
+
+            //Figure out how many total IP Addresses there are.
+            //Also assign each mergingIPArray value a progression related integer.
+            totalIPAddresses = 0;
+            scanProgress = 0;
+
+            progressIPArray = [];
+            progressIPArray[0] = { integerIPArrayBase: 0, integerIPArrayRange: 0 };
+
+            iPArrayLength = mergingIPArray.length;
+            for (arrayIndexSorting = 0; arrayIndexSorting < iPArrayLength; arrayIndexSorting++) {
+                totalIPAddresses += mergingIPArray[arrayIndexSorting].integerIPArrayRange - mergingIPArray[arrayIndexSorting].integerIPArrayBase + 1;
+                //Accounting for the Base IP Address.
+                scanProgress += 1;
+                //For progressIPArray, Base will be the starting point and Range will be how long until until it is time to move onto the next Index.
+                progressIPArray[arrayIndexSorting] = { integerIPArrayBase: scanProgress, integerIPArrayRange: (mergingIPArray[arrayIndexSorting].integerIPArrayRange - mergingIPArray[arrayIndexSorting].integerIPArrayBase) };
+                scanProgress += mergingIPArray[arrayIndexSorting].integerIPArrayRange - mergingIPArray[arrayIndexSorting].integerIPArrayBase;
+                //document.getElementById("debug").innerHTML += "Merged Range " + arrayIndexSorting + ": " + mergingIPArray[arrayIndexSorting].integerIPArrayBase + " - " + mergingIPArray[arrayIndexSorting].integerIPArrayRange + "<br/>Progress Range " + arrayIndexSorting + ": Starts at " + progressIPArray[arrayIndexSorting].integerIPArrayBase + " and has " + progressIPArray[arrayIndexSorting].integerIPArrayRange + " more.<br/>";
+            }
+            //Can use this again for the display calculation loops.
+            scanProgress = 0;
+            scanProgressGoal = 0;
+
+            //Use modulo to get the number to be more inclusive/get the remainder. Then for evening out the remainder add 1 for a set number of machines.
+            eachToScan = Math.floor((totalIPAddresses / totalDevices));
+            scanUnderflow = totalIPAddresses % totalDevices;
+            scanUnderflowRemaining = scanUnderflow;
+            //document.getElementById("debug").innerHTML += "ScanUnderflow: " + (totalIPAddresses % totalDevices) + "<br/>";
+            displayTotalIPMessage = false;
+            if (totalDevices > totalIPAddresses) {
+                displayTotalIPMessage = true;
+            }
+
+            //Display the calculated statistics.
+            arrayIndexDisplay = 0;
+            document.getElementById("display").innerHTML = "";
+            if (!displayTotalIPMessage) {
+                if (totalDevices == 1) {
+                    document.getElementById("display").innerHTML += "Total IP Addresses for the device to scan: " + eachToScan;
+                } else if (totalDevices == 2) {
+                    document.getElementById("display").innerHTML += "Total IP Addresses: " + totalIPAddresses + "<br/>Approximate IP Addresses for both devices to have: " + eachToScan;
+                    if (scanUnderflow > 0) {
+                        document.getElementById("display").innerHTML += "<br/>The odd one out was added into the first IP Address Range.";
+                    }
+                } else {
+                    document.getElementById("display").innerHTML += "Total IP Addresses: " + totalIPAddresses + "<br/>Approximate IP Addresses for each of the " + totalDevices + " devices to have: " + eachToScan;
+                    if (scanUnderflow > 1) {
+                        document.getElementById("display").innerHTML += "<br/>The " + scanUnderflow + " that didn't divide evenly are sprinkled individually among the IP Address Ranges.";
+                    } else if (scanUnderflow == 1) {
+                        document.getElementById("display").innerHTML += "<br/>The odd one out was added into the first IP Address Range.";
+                    }
+                }
+            }
+            document.getElementById("display").innerHTML += "<br/><br/><hr/><br/>";
+
+            //Creating a reference for faster appending of calculations.
+            tableOfCalculations = document.getElementById("display");
+
+            //This will be used to prevent wasted loops through an Array Index that has already been gone through.
+            completedIPArrays = 0;
+
+            displayCalculations(instanceNum);
+        }
+
+
+        //Sixth step
+        var arrayIndexCheckRange = 0;
+        var scanBonus = 0;
+        var hasBaseIP = false;
+        var displayRowContents = "";
+        var calculationsPerLoop = 0;
+        function displayCalculations(instanceNum) {
+            //Do not run if a new calculation has been started.
+            if (instanceNum != calculationsUnderway) {
+                return;
+            }
+
+            calculationsPerLoop = 0;
+            while (arrayIndexDisplay < totalDevices && scanProgress < totalIPAddresses) {
+
+                //Starting reference for timing out and starting on another frame.
+                timeStartedLoading = new Date().getTime();
+
+                //Update the Calculation Progress at the bottom of the screen.
+                calculationsPerLoop++;
+                progressDiv.textContent = "Calculating " + calculationsPerLoop + " devices " + arrayIndexDisplay + "/" + totalDevices + " " + Math.floor(arrayIndexDisplay / totalDevices * 100) + "%";
+
+                //Append the front end of this calculation.
+                newRow = document.createElement("div");
+                newRow.setAttribute("class", "divDataRow");
+                newCell = document.createElement("div");
+                newCell.setAttribute("class", "divDeviceIndex");
+                newCell.appendChild(document.createTextNode("IP Range for Device " + (arrayIndexDisplay + 1) + ": "));
+                newRow.appendChild(newCell);
+
+                newCell = document.createElement("div");
+                newCell.setAttribute("class", "divIPAddress");
+
+                //Setup a break away point for starting on the next row.
+                scanProgressGoal = scanProgress + eachToScan;
+                //document.getElementById("debug").innerHTML += "RemainingScanUnderflow: " + scanUnderflowRemaining;
+                if (scanUnderflowRemaining > 0) {
+                    scanBonus = Math.ceil(scanUnderflow / totalDevices);
+                    if (scanBonus > scanUnderflowRemaining) {
+                        scanBonus = scanUnderflowRemaining;
+                    }
+                    scanProgressGoal += scanBonus;
+                    scanUnderflowRemaining -= scanBonus;
+                }/* else {
+                    //No scanBonus was added, so for debug show it as zero.
+                    scanBonus = 0;
+                }*/
+                //document.getElementById("debug").innerHTML += " | ScanBonus: " + scanBonus + "<br/>";
+
+                //Time to calculate the IP Addresses to display for this row.
+                displayRowContents = "";
+                hasBaseIP = false;
+                for (arrayIndexSorting = completedIPArrays; (arrayIndexSorting < iPArrayLength && scanProgress < scanProgressGoal); arrayIndexSorting++) {
+
+                    //If this is not the first range, add a comma separation.
+                    if (hasBaseIP) {
+                        displayRowContents += ", ";
+                    } else {
+                        hasBaseIP = true;
+                    }
+                    //Setup the starting IP Address for this range.
+                    scanProgress++;
+                    displayRowContents += integerToIP(scanProgress - progressIPArray[arrayIndexSorting].integerIPArrayBase + mergingIPArray[arrayIndexSorting].integerIPArrayBase);
+                    //document.getElementById("debug").innerHTML += "Index " + (arrayIndexSorting + 1) + "/" + iPArrayLength + "<br/>";
+
+
+                    //Check if the Base IP Address already reached our limit.
+                    if (scanProgress < scanProgressGoal) {
+                        if (progressIPArray[arrayIndexSorting].integerIPArrayRange > 0 && scanProgress != (progressIPArray[arrayIndexSorting].integerIPArrayBase + progressIPArray[arrayIndexSorting].integerIPArrayRange)) {
+                            //This IPArray has more than one IP Address, so check if the scanProgressGoal will absorb the rest of it or not.
+                            //document.getElementById("debug").innerHTML += "scanProgressGoal " + scanProgressGoal + " >= progressIPArrayBase " + progressIPArray[arrayIndexSorting].integerIPArrayBase + " + progressIPArrayRange " + progressIPArray[arrayIndexSorting].integerIPArrayRange + " : " + (scanProgressGoal >= (progressIPArray[arrayIndexSorting].integerIPArrayBase + progressIPArray[arrayIndexSorting].integerIPArrayRange)) + "<br/>";
+                            if (scanProgressGoal >= (progressIPArray[arrayIndexSorting].integerIPArrayBase + progressIPArray[arrayIndexSorting].integerIPArrayRange)) {
+                                displayRowContents += " - " + integerToIP(mergingIPArray[arrayIndexSorting].integerIPArrayRange);
+                                scanProgress += progressIPArray[arrayIndexSorting].integerIPArrayBase + progressIPArray[arrayIndexSorting].integerIPArrayRange - scanProgress;
+                                completedIPArrays++;
+                            } else {
+                                scanProgress += (scanProgressGoal - scanProgress);
+                                displayRowContents += " - " + integerToIP(scanProgress - progressIPArray[arrayIndexSorting].integerIPArrayBase + mergingIPArray[arrayIndexSorting].integerIPArrayBase);
+                            }
+                        } else {
+                            //There was only one IP Address in this IPArray, so time to move onto the next IPArray.
+                            completedIPArrays++;
+                        }
+                    } else {
+                        //scanProgressGoal was hit, so check if the IPArray being worked on was also completed before the next Display Row.
+                        if (progressIPArray[arrayIndexSorting].integerIPArrayRange == 0 || scanProgressGoal >= (progressIPArray[arrayIndexSorting].integerIPArrayBase + progressIPArray[arrayIndexSorting].integerIPArrayRange)) {
+                            completedIPArrays++;
+                        }
+                    }
+                }
+
+
+                //Prep the next iteration.
+                newCell.appendChild(document.createTextNode(displayRowContents));
+                newRow.appendChild(newCell);
+                newRow.appendChild(document.createElement("br"));
+                tableOfCalculations.appendChild(newRow);
+
+                arrayIndexDisplay++;
+
+                //If there is going to be another iterations and the amount of time for the browser to be detected as frozen passes, break away and attempt to resume the calculation the next frame.
+                if (arrayIndexDisplay < totalDevices) {
+                    timeCurrentLoading = new Date().getTime();
+                    if (timeCurrentLoading >= (timeStartedLoading + 1)) {
+                        //document.getElementById("debug").innerHTML += "Display Loop Broke Away at " + arrayIndexDisplay + "!<br/>";
+                        calculationSetTimeout(2, instanceNum);
+                        return;
+                    }
+                }
+            }
+
+            if (displayTotalIPMessage) {
+                document.getElementById("display").innerHTML += "<br/>The number of available IP Addresses were depleted for the number of devices.";
+            }
+
+            //This area is run after the calculation is completed.
+            //progressDiv.style.height = "0em";
+            progressDiv.textContent = "Calculation completed in " + (Math.floor(new Date().getTime() - timeCalculatingStarted) / 1000) + " seconds.";
+
+            //document.getElementById("debug").innerHTML += "Display Completed!";
+            //If processing has made it to this point, then it was uninterupted and has to have been the latest instance.
+            calculationsUnderway = 0;
+        }
+
+
+
+
+
+
+
+
+
+
+        /*
+        function initiateResultDisplayOLD()
+        {
+            document.getElementById("debug").innerHTML += "Display Results Started!<br/>";
+            arrayIndexCalc = 0;
+            scanBookmark = 0;
+
+                
+            //This value is going to be used multiple times, storing into a variable for legibility and optimization.
+            deviceAmountField = document.getElementById("deviceAmount").value;
+
+            //Double check that the input is valid.
+            if (!(deviceAmountField == 0 || deviceAmountField == "") && Number.isInteger(parseInt(deviceAmountField)))
+            {
+                deviceAmount = parseInt(deviceAmountField);
+
+                //No point in having zero machines associated, so may as well cap the value to where there's one for each device.
+                if (deviceAmount > 17891327)
+                {
+                    deviceAmount = 17891327;
+                }
+                scanPile = Math.round((17891327 / deviceAmount));
+                    
+                //Clear the display area in preperation for a newly generated result by setting it to a default value.
+                document.getElementById("display").innerHTML = "Total IP Addresses for each of " + deviceAmount.toString() + " devices to have: " + scanPile.toString() + "<br/><br/><hr/><br/>";
+            } else {
+                //deviceAmountField somehow was invalid. Let the end user know.
+                document.getElementById("display").innerHTML = "The Number of Devices could not be recognized as an integer.";
+                return;
+            }
+            progressDiv = document.getElementById("progress");
+            progressDiv.appendChild(document.createTextNode("Calculating 1/" + deviceAmount));
+            progressDiv.style.height = "1.2em";
+
+            //document.getElementById("display").innerHTML += "<table id='calculationTable' class='calculationTable'></table>";
+            tableOfCalculations = document.getElementById("display");
+            calculateRangesOLD();
+        }
+
+        //Class A IP Addresses start off with an integer of 167772160 up to 184549375, totaling in 16777216 devices (starting the count from zero due to indexed numbers).
+        var startingIPClassA = 167772160;
+        var endingIPClassA = 184549375;
+        var devicesInClassA = 16777215;
+
+        //Class B IP Addresses start off with an integer of 2886729728 up to 2887778303, totaling in 1048576 devices.
+        var startingIPClassB = 2886729728;
+        var endingIPClassB = 2887778303;
+        var devicesInClassB = 1048575;
+
+        //Class C IP Addresses start off with an integer of 3232235520 up to 3232301055, totaling in 65536 devices.
+        var startingIPClassC = 3232235520;
+        var endingIPClassC = 3232301055;
+        var devicesInClassC = 65535;
+                
+        //These variables are intended to be used in a loop that will be used to track progress.
+        var hasIPClassA = false;
+        var hasIPClassB = false;
+        var hasIPClassC = false;
+
+        var calculationsPerLoop = 0;
+        var loopTimeLimit = true;
+
+        //The button was clicked, time to process IP ranges for the number of devices.
+        function calculateRangesOLD() {
+            timeStartedLoading = new Date().getTime();
+            calculationsPerLoop = 0;
+            //This is where each device will have its IP Address range built.
+            while (arrayIndexCalc < deviceAmount) {
+                calculationsPerLoop++;
+                progressDiv.textContent = "Calculating " + calculationsPerLoop + " devices " + (arrayIndexCalc + 1) + "/" + deviceAmount + " " + Math.floor(arrayIndexCalc / deviceAmount * 100) + "%";
+                newRow = document.createElement("div");
+                newRow.setAttribute("class", "divDataRow");
+                newCell = document.createElement("div");
+                newCell.setAttribute("class", "divDeviceIndex");
+                newCell.appendChild(document.createTextNode("OLD IP Range for Device " + (arrayIndexCalc + 1) + ": "));
+                newRow.appendChild(newCell);
+
+                hasIPClassA = false;
+                hasIPClassB = false;
+                hasIPClassC = false;
+
+                newCell = document.createElement("div");
+                newCell.setAttribute("class", "divIPAddress");
+
+                //First step, we need to find our starting point.
+
+                //If scanBookmark is inside of the Class A use that IP range.
+                if (scanBookmark <= devicesInClassA) {
+                    calculationRowContents = " " + integerToIP(startingIPClassA + scanBookmark);
+                    hasIPClassA = true;
+                }
+
+                //If scanBookmark is inside of the Class B use that IP range.
+                else if (scanBookmark > devicesInClassA && scanBookmark <= (devicesInClassA + devicesInClassB)) {
+                    calculationRowContents = " " + integerToIP(startingIPClassB + scanBookmark - devicesInClassA);
+                    hasIPClassB = true;
+                }
+
+                //If scanBookmark is inside of the Class C use that IP range.
+                else if (scanBookmark > (devicesInClassA + devicesInClassB)) {
+                    calculationRowContents = " " + integerToIP(startingIPClassC + scanBookmark - devicesInClassA - devicesInClassB);
+                    hasIPClassC = true;
+                }
+
+
+                //If things are incrimenting by one, do not bother continuing this loop.
+                if (scanBookmark + scanPile == scanBookmark + 1) {
+                    //Prep the next iteration.
+                    newCell.appendChild(document.createTextNode(calculationRowContents));
+                    newRow.appendChild(newCell);
+                    newRow.appendChild(document.createElement("br"));
+                    tableOfCalculations.appendChild(newRow);
+
+                    if ((scanBookmark + scanPile) >= 17891327) {
+                        //This area is run after the calculation is completed.
+                        //progressDiv.style.height = "0em";
+                        progressDiv.textContent = "Calculation completed in " + (Math.floor((new Date().getTime() - timeCalculatingStarted) * .01) * 0.1) + " seconds.";
+                        calculationsUnderway = 0;
+                    }
+
+                    arrayIndexCalc++;
+                    scanBookmark += scanPile;
+
+                    //If the amount of time for the browser to be detected as frozen passes, break away and attempt to resume the calculation the next frame.
+                    timeCurrentLoading = new Date().getTime();
+                    if (timeCurrentLoading >= (timeStartedLoading + 1)) {
+                        calculationSetTimeout(3);
+                        break;
+                    } else {
+                        continue;
+                    }
+                }
+
+
+                //Up Next we need to detect if there are any bridges between IP Address Classes to build.
+
+                //Build a bridge to Class B if the starting point was in Class A.
+                if (hasIPClassA && (scanBookmark + scanPile) > devicesInClassA) {
+                    calculationRowContents += "-" + integerToIP(startingIPClassA + devicesInClassA) + ", " + integerToIP(startingIPClassB);
+
+                    //If scanBookmark is at the start of a new IP range, just stop the loop here.
+                    if ((devicesInClassA + 1) == (scanBookmark + scanPile - 1)) {
+                        scanBookmark += scanPile;
+                        timeCurrentLoading = new Date().getTime();
+                        if (timeCurrentLoading >= timeStartedLoading + 1) {
+                            calculationSetTimeout(3)
+                            break;
+                        } else {
+                            continue;
+                        }
+                    }
+                }
+
+                //Build a bridge to Class C if the starting point was in Class A or Class B.
+                if ((hasIPClassA || hasIPClassB) && (scanBookmark + scanPile) > (devicesInClassA + devicesInClassB)) {
+                    calculationRowContents += "-" + integerToIP(startingIPClassB + devicesInClassB) + ", " + integerToIP(startingIPClassC);
+
+                    //If scanBookmark is at the start of a new IP range, just stop the loop here.
+                    if ((devicesInClassA + devicesInClassB + 1) == (scanBookmark + scanPile - 1)) {
+                        scanBookmark += scanPile;
+                        //If the amount of time for the browser to be detected as frozen passes, break away and attempt to resume the calculation the next frame.
+                        timeCurrentLoading = new Date().getTime();
+                        if (timeCurrentLoading >= timeStartedLoading + 1) {
+                            calculationSetTimeout(3)
+                            break;
+                        } else {
+                            continue;
+                        }
+                    }
+                }
+
+                //Finally need to display the ending to each line.
+
+                if ((scanBookmark + scanPile - 1) <= devicesInClassA) {
+                    calculationRowContents += "-" + integerToIP((startingIPClassA + (scanBookmark + scanPile - 1)));
+                    scanBookmark += scanPile;
+                }
+                //If scanBookmark is inside of the Class B use that IP range.
+                else if ((scanBookmark + scanPile - 1) > devicesInClassA && (scanBookmark + scanPile - 1) <= (devicesInClassA + devicesInClassB)) {
+                    calculationRowContents += "-" + integerToIP((startingIPClassB + (scanBookmark + scanPile - 1) - devicesInClassA));
+                    scanBookmark += scanPile;
+                } else if ((scanBookmark + scanPile) >= 17891327 || arrayIndexCalc == (deviceAmount - 1))
+                //Class C is very small compared to the rest, more likely it will be all assigned to one machine than it is to be divided among multiple.
+                {
+                    calculationRowContents += "-" + integerToIP((startingIPClassC + devicesInClassC));
+
+                    //This area is run after the calculation is completed.
+                    //progressDiv.style.height = "0em";
+                    progressDiv.textContent = "Calculation completed in " + (Math.floor((new Date().getTime() - timeCalculatingStarted) * .01) * 0.1) + " seconds.";
+                    calculationsUnderway = 0;
+
+                } else {
+                    calculationRowContents += "-" + integerToIP((startingIPClassC + (scanBookmark + scanPile - 1) - devicesInClassA - devicesInClassB));
+                    scanBookmark += scanPile;
+                }
+
+                //Prep the next iteration.
+                newCell.appendChild(document.createTextNode(calculationRowContents));
+                newRow.appendChild(newCell);
+                newRow.appendChild(document.createElement("br"));
+                tableOfCalculations.appendChild(newRow);
+
+                arrayIndexCalc++;
+
+                //If the amount of time for the browser to be detected as frozen passes, break away and attempt to resume the calculation the next frame.
+                timeCurrentLoading = new Date().getTime();
+                if (timeCurrentLoading >= (timeStartedLoading + 1)) {
+                    calculationSetTimeout(3)
+                    break;
+                }
+            }
+            calculationsUnderway--;
+        }*/
+        
+
+
+
+
+
+        /* From https://www.vishalon.net/blog/javascript-getting-and-setting-caret-position-in-textarea
+        function getCaretPosition(ctrl) {
+            // IE < 9 Support 
+            if (document.selection) {
+                ctrl.focus();
+                var range = document.selection.createRange();
+                var rangelen = range.text.length;
+                range.moveStart('character', -ctrl.value.length);
+                var start = range.text.length - rangelen;
+                return {
+                    'start': start,
+                    'end': start + rangelen
+                };
+            } // IE >=9 and other browsers
+            else if (ctrl.selectionStart || ctrl.selectionStart == '0') {
+                return {
+                    'start': ctrl.selectionStart,
+                    'end': ctrl.selectionEnd
+                };
+            } else {
+                return {
+                    'start': 0,
+                    'end': 0
+                };
+            }
+        }
+
+        function setCaretPosition(ctrl, start, end) {
+            // IE >= 9 and other browsers
+            if (ctrl.setSelectionRange) {
+                ctrl.focus();
+                ctrl.setSelectionRange(start, end);
+            }
+            // IE < 9 
+            else if (ctrl.createTextRange) {
+                var range = ctrl.createTextRange();
+                range.collapse(true);
+                range.moveEnd('character', end);
+                range.moveStart('character', start);
+                range.select();
+            }
+        }*/
+
+
+
+    </script>
+</head>
+<body>
+    <table align="center" class="headerTable">
+        <tr>
+            <td id="calculatorInput" class="calculatorInput">
+                <h3>IP Range Divider</h3>
+                <br>Javascript is required and if you can see this it is not available. :(
+            </td>
+        </tr>
+    </table>
+    <div id="debugHeader"></div>
+    <div id="debug"></div>
+    <div id="displayHeader"></div>
+    <div id="display" class="display"></div>
+    <div class="progressClass" id="progress">This is where loading progress will be displayed.</div>
+    <div class="whitespaceDiv"></div>
+    
+    <script>
+        populateHTML();
+    </script>
+</body>
+</html> 
